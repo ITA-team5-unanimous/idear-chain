@@ -17,3 +17,8 @@ dist/
 .idea/
 *.swp
 *~
+
+# Hardhat
+cache/
+artifacts/
+typechain-types/
