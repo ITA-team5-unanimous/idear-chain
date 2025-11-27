@@ -21,7 +21,9 @@
     "hardhat:compile": "hardhat compile",
     "hardhat:test": "hardhat test",
     "deploy:counter:local": "hardhat run scripts/deploy-counter.ts --network localhost",
-    "deploy:counter:sepolia": "hardhat run scripts/deploy-counter.ts --network sepolia"
+    "deploy:counter:sepolia": "hardhat run scripts/deploy-counter.ts --network sepolia",
+    "deploy:fileproof:local": "hardhat run scripts/deploy-fileproof.ts --network localhost",
+    "deploy:fileproof:sepolia": "hardhat run scripts/deploy-fileproof.ts --network sepolia"
   },
   "keywords": [
     "blockchain",
