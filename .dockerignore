@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+.env.example
+README.md
+.github
+test
+coverage
+.eslintrc.js
+.prettierrc
+*.md
+cache
+artifacts
+typechain-types

@@ -1,0 +1,96 @@
+{
+  "network": "sepolia",
+  "contractAddress": "0x7840da5bA47FB34aA62c19Dd4A0E5CB52D352BD8",
+  "deployer": "0x6604c00B44d1Ea57B5C8d53DfC520D031257c9c0",
+  "deployedAt": "2025-11-02T18:10:24.674Z",
+  "blockNumber": 9546104,
+  "abi": [
+    {
+      "type": "constructor",
+      "stateMutability": "undefined",
+      "payable": false,
+      "inputs": []
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "CountChanged",
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "newCount",
+          "indexed": false
+        },
+        {
+          "type": "address",
+          "name": "changedBy",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "CountReset",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "resetBy",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "decrement",
+      "constant": false,
+      "payable": false,
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "getCount",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "increment",
+      "constant": false,
+      "payable": false,
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "owner",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "reset",
+      "constant": false,
+      "payable": false,
+      "inputs": [],
+      "outputs": []
+    }
+  ]
+}
