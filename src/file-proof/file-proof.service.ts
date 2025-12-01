@@ -228,16 +228,16 @@ export class FileProofService implements OnModuleInit {
   }
 
   // 컨트랙트 정보 조회
-  getContractInfo(): {
+  async getContractInfo(): Promise<{
     address: string;
     network: string;
     owner: string;
-  } {
+  }> {
     this.ensureContract();
     return {
       address: this.contractAddress,
       network: this.configService.get<string>('NETWORK') || 'localhost',
-      owner: this.blockchainService.getSigner().address,
+      owner: await this.fileProofContract.owner(),
     };
   }
 }
