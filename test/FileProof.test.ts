@@ -36,13 +36,17 @@ describe('FileProof', function () {
 
   describe('registerCommit', function () {
     it('Should register a commit successfully (only owner)', async function () {
-      await expect(fileProof.registerCommit(commit, timestamp, serverSignature))
+      const tx = await fileProof.registerCommit(commit, timestamp, serverSignature);
+      const receipt = await tx.wait();
+      const block = await hre.ethers.provider.getBlock(receipt!.blockNumber);
+
+      await expect(tx)
         .to.emit(fileProof, 'CommitRegistered')
         .withArgs(
           commit,
           timestamp,
-          await hre.ethers.provider.getBlockNumber() + 1,
-          await hre.ethers.provider.getBlock('latest').then((b) => b!.timestamp + 1),
+          receipt!.blockNumber,
+          block!.timestamp,
           owner.address,
         );
 
