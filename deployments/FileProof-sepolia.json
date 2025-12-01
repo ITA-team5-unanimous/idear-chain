@@ -1,0 +1,234 @@
+{
+  "network": "sepolia",
+  "contractAddress": "0xe138EC4803bBC735025FA932419fa04B43623207",
+  "deployer": "0x6604c00B44d1Ea57B5C8d53DfC520D031257c9c0",
+  "deployedAt": "2025-11-27T04:46:26.061Z",
+  "blockNumber": 9715480,
+  "abi": [
+    {
+      "type": "constructor",
+      "stateMutability": "undefined",
+      "payable": false,
+      "inputs": []
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "CommitRegistered",
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "commit",
+          "indexed": true
+        },
+        {
+          "type": "uint256",
+          "name": "timestamp",
+          "indexed": false
+        },
+        {
+          "type": "uint256",
+          "name": "blockNumber",
+          "indexed": false
+        },
+        {
+          "type": "uint256",
+          "name": "registeredAt",
+          "indexed": false
+        },
+        {
+          "type": "address",
+          "name": "registrar",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "commitsByIndex",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bytes32",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "getCommit",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "_commit"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "tuple",
+          "name": "",
+          "components": [
+            {
+              "type": "bytes32",
+              "name": "commit"
+            },
+            {
+              "type": "uint256",
+              "name": "timestamp"
+            },
+            {
+              "type": "bytes",
+              "name": "serverSignature"
+            },
+            {
+              "type": "uint256",
+              "name": "blockNumber"
+            },
+            {
+              "type": "uint256",
+              "name": "registeredAt"
+            },
+            {
+              "type": "bool",
+              "name": "exists"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "getCommitByIndex",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "_index"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bytes32",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "getCommitsByRange",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "_start"
+        },
+        {
+          "type": "uint256",
+          "name": "_end"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bytes32[]",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "owner",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "registerCommit",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "_commit"
+        },
+        {
+          "type": "uint256",
+          "name": "_timestamp"
+        },
+        {
+          "type": "bytes",
+          "name": "_serverSignature"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bool",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "totalCommits",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "verifyCommit",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "_commit"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bool",
+          "name": ""
+        },
+        {
+          "type": "uint256",
+          "name": ""
+        },
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ]
+    }
+  ]
+}
