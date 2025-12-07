@@ -4,13 +4,23 @@ import {
   BadRequestException,
   InternalServerErrorException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import { ethers } from 'ethers';
 import * as fs from 'fs';
 import * as path from 'path';
+import { firstValueFrom } from 'rxjs';
 import { RegisterCommitDto } from './dto/register-commit.dto';
+import {
+  TransactionResultDto,
+  TransactionStatus,
+  TransactionSuccessData,
+  TransactionFailureData,
+  TransactionFailureReason,
+} from './dto/webhook.dto';
 
 export interface CommitRecord {
   commit: string;
@@ -24,16 +34,23 @@ export interface CommitRecord {
 
 @Injectable()
 export class FileProofService implements OnModuleInit {
+  private readonly logger = new Logger(FileProofService.name);
   private fileProofContract: ethers.Contract;
+  private wsContract: ethers.Contract;
   private contractAddress: string;
+  private webhookUrl: string;
 
   constructor(
     private blockchainService: BlockchainService,
     private configService: ConfigService,
-  ) {}
+    private httpService: HttpService,
+  ) {
+    this.webhookUrl = this.configService.get<string>('WEBHOOK_URL') || '';
+  }
 
   async onModuleInit() {
     await this.loadContract();
+    await this.setupEventListener();
   }
 
   private async loadContract() {
@@ -46,10 +63,7 @@ export class FileProofService implements OnModuleInit {
       );
 
       if (!fs.existsSync(deploymentPath)) {
-        console.warn(
-          `FileProof deployment file not found: ${deploymentPath}`,
-        );
-        console.warn('Please deploy the FileProof contract first');
+        this.logger.warn(`FileProof deployment file not found: ${deploymentPath}`);
         return;
       }
 
@@ -63,53 +77,67 @@ export class FileProofService implements OnModuleInit {
         true,
       );
 
-      console.log(`FileProof contract loaded: ${this.contractAddress}`);
+      this.logger.log(`FileProof contract loaded: ${this.contractAddress}`);
     } catch (error) {
-      console.error('Failed to load FileProof contract:', error.message);
+      this.logger.error('Failed to load FileProof contract:', error.message);
     }
   }
 
   private ensureContract() {
     if (!this.fileProofContract) {
-      throw new BadRequestException(
-        'FileProof contract not initialized. Please deploy the contract first.',
+      throw new InternalServerErrorException(
+        'FileProof contract not initialized.',
       );
     }
   }
 
-  // Commit을 블록체인에 등록
-  async registerCommit(dto: RegisterCommitDto): Promise<{
-    txHash: string;
-    commit: string;
-    blockNumber: number;
-    gasUsed: string;
-    gasPrice: string;
-    gasCostEth: string;
-  }> {
+  // Commit을 블록체인에 등록 (백그라운드 처리, 결과는 웹훅 전송)
+  async registerCommit(dto: RegisterCommitDto): Promise<void> {
     this.ensureContract();
+
+    // 사전 검증으로 이미 등록된 commit인지 확인, Revert 방지
+    let exists = false;
     try {
+      [exists] = await this.fileProofContract.verifyCommit(dto.commit);
+    } catch (error) {
+      this.logger.error(`Failed to verify commit ${dto.commit}: ${error.message}`);
+      await this.sendFailureWebhook(
+        dto.commit,
+        TransactionFailureReason.NETWORK_ERROR,
+        `Verification failed: ${error.message}`,
+      );
+      return;
+    }
+
+    if (exists) {
+      this.logger.warn(`Commit already registered: ${dto.commit}`);
+      await this.sendFailureWebhook(
+        dto.commit,
+        TransactionFailureReason.ALREADY_REGISTERED,
+        'Commit already exists on blockchain',
+      );
+      return;
+    }
+
+    // 트랜잭션 제출
+    try {
+      const startTime = Date.now();
+
       const tx = await this.fileProofContract.registerCommit(
         dto.commit,
         dto.timestamp,
         dto.serverSignature,
       );
-      const receipt = await tx.wait();
 
-      const gasUsed = receipt.gasUsed;
-      const gasPrice = receipt.gasPrice || tx.gasPrice;
-      const gasCost = gasUsed * gasPrice;
+      this.logger.log(`Transaction sent for commit ${dto.commit}: ${tx.hash} (${Date.now()-startTime}ms)`);
 
-      return {
-        txHash: receipt.hash,
-        commit: dto.commit,
-        blockNumber: receipt.blockNumber,
-        gasUsed: gasUsed.toString(),
-        gasPrice: ethers.formatUnits(gasPrice, 'gwei') + ' gwei',
-        gasCostEth: ethers.formatEther(gasCost) + ' ETH',
-      };
+      // SUCCESS는 WebSocket 이벤트 리스너에서 처리
     } catch (error) {
-      throw new InternalServerErrorException(
-        `Failed to register commit: ${error.message}`,
+      this.logger.error(`Failed to submit transaction for commit ${dto.commit}: ${error.message}`);
+      await this.sendFailureWebhook(
+        dto.commit,
+        TransactionFailureReason.SUBMISSION_FAILED,
+        error.message,
       );
     }
   }
@@ -117,6 +145,12 @@ export class FileProofService implements OnModuleInit {
   // Commit 레코드 조회
   async getCommit(commit: string): Promise<CommitRecord> {
     this.ensureContract();
+
+    const verification = await this.verifyCommit(commit);
+    if (!verification.exists) {
+      throw new NotFoundException(`Commit not found: ${commit}`);
+    }
+
     try {
       const record = await this.fileProofContract.getCommit(commit);
 
@@ -136,9 +170,6 @@ export class FileProofService implements OnModuleInit {
         exists: record.exists,
       };
     } catch (error) {
-      if (error.message.includes('Not found')) {
-        throw new NotFoundException(`Commit not found: ${commit}`);
-      }
       throw new InternalServerErrorException(
         `Failed to get commit: ${error.message}`,
       );
@@ -239,5 +270,102 @@ export class FileProofService implements OnModuleInit {
       network: this.configService.get<string>('NETWORK') || 'localhost',
       owner: await this.fileProofContract.owner(),
     };
+  }
+
+  // WebSocket 이벤트 리스너 설정
+  private async setupEventListener(): Promise<void> {
+    try {
+      const wsProvider = this.blockchainService.getWsProvider();
+
+      this.wsContract = new ethers.Contract(
+        this.contractAddress,
+        this.fileProofContract.interface,
+        wsProvider,
+      );
+
+      // CommitRegistered 이벤트 리스닝
+      this.wsContract.on(
+        'CommitRegistered',
+        async (commit, timestamp, blockNumber, registeredAt, registrar, event) => {
+          try {
+            const txHash = event.log.transactionHash;
+
+            const receipt = await wsProvider.getTransactionReceipt(txHash);
+
+            if (!receipt) {
+              this.logger.error(`Receipt not found for tx ${txHash}`);
+              return;
+            }
+
+            const gasUsed = receipt.gasUsed;
+            const gasPrice = receipt.gasPrice || 0n;
+            const gasCost = gasUsed * gasPrice;
+
+            // SUCCESS 웹훅 전송
+            await this.sendWebhook({
+              status: TransactionStatus.SUCCESS,
+              commit: commit,
+              txHash: txHash,
+              successData: {
+                blockNumber: Number(blockNumber),
+                registeredAt: Number(registeredAt),
+                gasUsed: gasUsed.toString(),
+                gasPrice: ethers.formatUnits(gasPrice, 'gwei') + ' gwei',
+                gasCostEth: ethers.formatEther(gasCost) + ' ETH',
+              },
+            });
+
+            this.logger.log(`Webhook sent for commit ${commit}`);
+          } catch (error) {
+            this.logger.error(`Failed to process CommitRegistered event: ${error.message}`);
+          }
+        },
+      );
+
+      this.logger.log('WebSocket event listener setup complete');
+    } catch (error) {
+      this.logger.error(`Failed to setup event listener: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // 웹훅 전송
+  private async sendWebhook(transactionResultDto: TransactionResultDto): Promise<void> {
+    if (!this.webhookUrl) {
+      this.logger.warn('Webhook URL not configured.');
+      return;
+    }
+
+    try {
+      this.logger.log(`Sending webhook to ${this.webhookUrl} for commit ${transactionResultDto.commit}`);
+
+      const response = await firstValueFrom(
+        this.httpService.post(this.webhookUrl, transactionResultDto, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          timeout: 3000, // 3초 타임아웃
+        }),
+      );
+
+      this.logger.log(`Webhook sent successfully for commit ${transactionResultDto.commit}`);
+    } catch (error) {
+      this.logger.error(`Failed to send webhook for commit ${transactionResultDto.commit}: ${error.message}`);
+    }
+  }
+
+  // FAILURE 웹훅 전송 헬퍼
+  private async sendFailureWebhook(
+    commit: string,
+    reason: TransactionFailureReason,
+    error: string,
+    txHash?: string,
+  ): Promise<void> {
+    await this.sendWebhook({
+      status: TransactionStatus.FAILURE,
+      commit: commit,
+      txHash: txHash,
+      failureData: { reason, error },
+    });
   }
 }

@@ -60,6 +60,7 @@ jobs:
                  -e NETWORK=${{ secrets.NETWORK }} \
                  -e RPC_URL=${{ secrets.RPC_URL }} \
                  -e PRIVATE_KEY=${{ secrets.PRIVATE_KEY }} \
+                 -e WEBHOOK_URL=${{ secrets.WEBHOOK_URL }} \
                  ${IMAGE_NAME}
 
             sleep 10
