@@ -301,18 +301,20 @@ export class FileProofService implements OnModuleInit {
             const gasPrice = receipt.gasPrice || 0n;
             const gasCost = gasUsed * gasPrice;
 
+            const successData: TransactionSuccessData = {
+              blockNumber: Number(blockNumber),
+              registeredAt: Number(registeredAt),
+              gasUsed: gasUsed.toString(),
+              gasPrice: ethers.formatUnits(gasPrice, 'gwei') + ' gwei',
+              gasCostEth: ethers.formatEther(gasCost) + ' ETH',
+            };
+
             // SUCCESS 웹훅 전송
             await this.sendWebhook({
               status: TransactionStatus.SUCCESS,
               commit: commit,
               txHash: txHash,
-              successData: {
-                blockNumber: Number(blockNumber),
-                registeredAt: Number(registeredAt),
-                gasUsed: gasUsed.toString(),
-                gasPrice: ethers.formatUnits(gasPrice, 'gwei') + ' gwei',
-                gasCostEth: ethers.formatEther(gasCost) + ' ETH',
-              },
+              successData,
             });
 
             this.logger.log(`Webhook sent for commit ${commit}`);
@@ -339,7 +341,7 @@ export class FileProofService implements OnModuleInit {
     try {
       this.logger.log(`Sending webhook to ${this.webhookUrl} for commit ${transactionResultDto.commit}`);
 
-      const response = await firstValueFrom(
+      await firstValueFrom(
         this.httpService.post(this.webhookUrl, transactionResultDto, {
           headers: {
             'Content-Type': 'application/json',
@@ -361,11 +363,16 @@ export class FileProofService implements OnModuleInit {
     error: string,
     txHash?: string,
   ): Promise<void> {
+    const failureData: TransactionFailureData = {
+      reason,
+      error,
+    };
+
     await this.sendWebhook({
       status: TransactionStatus.FAILURE,
       commit: commit,
       txHash: txHash,
-      failureData: { reason, error },
+      failureData,
     });
   }
 }
