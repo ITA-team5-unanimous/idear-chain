@@ -4,6 +4,8 @@ import {
   HttpCode, HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { FileProofService } from './file-proof.service';
 import { RegisterCommitDto } from './dto/register-commit.dto';
 
@@ -11,19 +13,23 @@ import { RegisterCommitDto } from './dto/register-commit.dto';
 export class FileProofController {
   private readonly logger = new Logger(FileProofController.name);
 
-  constructor(private readonly fileProofService: FileProofService) {}
+  constructor(
+    private readonly fileProofService: FileProofService,
+    @InjectQueue('commit') private readonly commitQueue: Queue<RegisterCommitDto>,
+  ) {}
 
   // Commit을 블록체인에 등록
   @Post('commits')
   @HttpCode(HttpStatus.ACCEPTED)
   async registerCommit(@Body() dto: RegisterCommitDto) {
-    this.fileProofService.registerCommit(dto).catch((error) => {
-      this.logger.error(`Background transaction processing failed for ${dto.commit}: ${error.message}`);
-    });
+    const job = await this.commitQueue.add('register-commit', dto);
+
+    this.logger.log(`Job #${job.id} added to queue for commit ${dto.commit}`);
 
     return {
-      message: 'Transaction processing started',
+      message: 'Transaction queued for processing',
       commit: dto.commit,
+      jobId: job.id,
     };
   }
 

@@ -101,6 +101,12 @@ export class FileProofService implements OnModuleInit {
       [exists] = await this.fileProofContract.verifyCommit(dto.commit);
     } catch (error) {
       this.logger.error(`Failed to verify commit ${dto.commit}: ${error.message}`);
+
+      // 재시도 가능한 에러면 throw (BullMQ가 재시도)
+      if (this.isRetryableError(error)) {
+        throw error;
+      }
+
       await this.sendFailureWebhook(
         dto.commit,
         TransactionFailureReason.NETWORK_ERROR,
@@ -134,6 +140,12 @@ export class FileProofService implements OnModuleInit {
       // SUCCESS는 WebSocket 이벤트 리스너에서 처리
     } catch (error) {
       this.logger.error(`Failed to submit transaction for commit ${dto.commit}: ${error.message}`);
+
+      // 재시도 가능한 에러면 throw (BullMQ가 재시도)
+      if (this.isRetryableError(error)) {
+        throw error;
+      }
+
       await this.sendFailureWebhook(
         dto.commit,
         TransactionFailureReason.SUBMISSION_FAILED,
@@ -316,8 +328,6 @@ export class FileProofService implements OnModuleInit {
               txHash: txHash,
               successData,
             });
-
-            this.logger.log(`Webhook sent for commit ${commit}`);
           } catch (error) {
             this.logger.error(`Failed to process CommitRegistered event: ${error.message}`);
           }
@@ -356,8 +366,24 @@ export class FileProofService implements OnModuleInit {
     }
   }
 
+  // 재시도 가능한 에러 판단
+  private isRetryableError(error: any): boolean {
+    const msg = error.message?.toLowerCase() || '';
+
+    return (
+      msg.includes('network') ||
+      msg.includes('timeout') ||
+      msg.includes('econnrefused') ||
+      msg.includes('econnreset') ||
+      msg.includes('429') ||
+      msg.includes('rate limit') ||
+      msg.includes('service unavailable') ||
+      msg.includes('nonce')
+    );
+  }
+
   // FAILURE 웹훅 전송 헬퍼
-  private async sendFailureWebhook(
+  async sendFailureWebhook(
     commit: string,
     reason: TransactionFailureReason,
     error: string,

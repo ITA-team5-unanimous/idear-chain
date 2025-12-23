@@ -7,6 +7,8 @@ export enum TransactionFailureReason {
   ALREADY_REGISTERED = 'already_registered',
   SUBMISSION_FAILED = 'submission_failed',
   NETWORK_ERROR = 'network_error',
+  NONCE_ERROR = 'nonce_error',
+  RPC_RATE_LIMIT = 'rpc_rate_limit',
 }
 
 export interface TransactionSuccessData {
