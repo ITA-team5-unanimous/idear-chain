@@ -59,8 +59,12 @@ jobs:
                  -e NODE_ENV=production \
                  -e NETWORK=${{ secrets.NETWORK }} \
                  -e RPC_URL=${{ secrets.RPC_URL }} \
+                 -e WS_RPC_URL=${{ secrets.WS_RPC_URL }} \
                  -e PRIVATE_KEY=${{ secrets.PRIVATE_KEY }} \
                  -e WEBHOOK_URL=${{ secrets.WEBHOOK_URL }} \
+                 -e REDIS_HOST=${{ secrets.REDIS_HOST }} \
+                 -e REDIS_PORT=${{ secrets.REDIS_PORT }} \
+                 -e REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }} \
                  ${IMAGE_NAME}
 
             sleep 10
