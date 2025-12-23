@@ -2,19 +2,35 @@ import {
   Controller, Get, Post,
   Body, Param, Query,
   HttpCode, HttpStatus,
+  Logger,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { FileProofService } from './file-proof.service';
 import { RegisterCommitDto } from './dto/register-commit.dto';
 
 @Controller('file-proof')
 export class FileProofController {
-  constructor(private readonly fileProofService: FileProofService) {}
+  private readonly logger = new Logger(FileProofController.name);
+
+  constructor(
+    private readonly fileProofService: FileProofService,
+    @InjectQueue('commit') private readonly commitQueue: Queue<RegisterCommitDto>,
+  ) {}
 
   // Commit을 블록체인에 등록
   @Post('commits')
-  @HttpCode(HttpStatus.CREATED)
+  @HttpCode(HttpStatus.ACCEPTED)
   async registerCommit(@Body() dto: RegisterCommitDto) {
-    return this.fileProofService.registerCommit(dto);
+    const job = await this.commitQueue.add('register-commit', dto);
+
+    this.logger.log(`Job #${job.id} added to queue for commit ${dto.commit}`);
+
+    return {
+      message: 'Transaction queued for processing',
+      commit: dto.commit,
+      jobId: job.id,
+    };
   }
 
   // 전체 commit 수 조회
