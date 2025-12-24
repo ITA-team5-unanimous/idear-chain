@@ -14,6 +14,7 @@ describe('FileProof', function () {
   const salt = hre.ethers.randomBytes(32);
   const commit = hre.ethers.sha256(hre.ethers.concat([fileHash, salt]));
   const timestamp = Math.floor(Date.now() / 1000);
+  const userSignature = hre.ethers.toUtf8Bytes('mock-user-signature');
   const serverSignature = hre.ethers.toUtf8Bytes('mock-server-signature');
 
   beforeEach(async function () {
@@ -36,7 +37,7 @@ describe('FileProof', function () {
 
   describe('registerCommit', function () {
     it('Should register a commit successfully (only owner)', async function () {
-      const tx = await fileProof.registerCommit(commit, timestamp, serverSignature);
+      const tx = await fileProof.registerCommit(commit, timestamp, userSignature, serverSignature);
       const receipt = await tx.wait();
       const block = await hre.ethers.provider.getBlock(receipt!.blockNumber);
 
@@ -55,33 +56,39 @@ describe('FileProof', function () {
 
     it('Should revert if not called by owner', async function () {
       await expect(
-        fileProof.connect(addr1).registerCommit(commit, timestamp, serverSignature),
+        fileProof.connect(addr1).registerCommit(commit, timestamp, userSignature, serverSignature),
       ).to.be.revertedWith('Only owner');
     });
 
     it('Should revert if commit is empty', async function () {
       const emptyCommit = hre.ethers.ZeroHash;
       await expect(
-        fileProof.registerCommit(emptyCommit, timestamp, serverSignature),
+        fileProof.registerCommit(emptyCommit, timestamp, userSignature, serverSignature),
       ).to.be.revertedWith('Empty commit');
     });
 
     it('Should revert if timestamp is 0', async function () {
-      await expect(fileProof.registerCommit(commit, 0, serverSignature)).to.be.revertedWith(
+      await expect(fileProof.registerCommit(commit, 0, userSignature, serverSignature)).to.be.revertedWith(
         'Invalid timestamp',
       );
     });
 
+    it('Should revert if userSignature is empty', async function () {
+      await expect(
+        fileProof.registerCommit(commit, timestamp, '0x', serverSignature),
+      ).to.be.revertedWith('Missing user signature');
+    });
+
     it('Should revert if serverSignature is empty', async function () {
       await expect(
-        fileProof.registerCommit(commit, timestamp, '0x'),
-      ).to.be.revertedWith('Missing signature');
+        fileProof.registerCommit(commit, timestamp, userSignature, '0x'),
+      ).to.be.revertedWith('Missing server signature');
     });
 
     it('Should revert if commit already exists', async function () {
-      await fileProof.registerCommit(commit, timestamp, serverSignature);
+      await fileProof.registerCommit(commit, timestamp, userSignature, serverSignature);
       await expect(
-        fileProof.registerCommit(commit, timestamp, serverSignature),
+        fileProof.registerCommit(commit, timestamp, userSignature, serverSignature),
       ).to.be.revertedWith('Already registered');
     });
 
@@ -89,20 +96,20 @@ describe('FileProof', function () {
       const commit2 = hre.ethers.sha256(hre.ethers.toUtf8Bytes('commit2'));
       const commit3 = hre.ethers.sha256(hre.ethers.toUtf8Bytes('commit3'));
 
-      await fileProof.registerCommit(commit, timestamp, serverSignature);
+      await fileProof.registerCommit(commit, timestamp, userSignature, serverSignature);
       expect(await fileProof.totalCommits()).to.equal(1);
 
-      await fileProof.registerCommit(commit2, timestamp, serverSignature);
+      await fileProof.registerCommit(commit2, timestamp, userSignature, serverSignature);
       expect(await fileProof.totalCommits()).to.equal(2);
 
-      await fileProof.registerCommit(commit3, timestamp, serverSignature);
+      await fileProof.registerCommit(commit3, timestamp, userSignature, serverSignature);
       expect(await fileProof.totalCommits()).to.equal(3);
     });
   });
 
   describe('getCommit', function () {
     beforeEach(async function () {
-      await fileProof.registerCommit(commit, timestamp, serverSignature);
+      await fileProof.registerCommit(commit, timestamp, userSignature, serverSignature);
     });
 
     it('Should return commit record correctly', async function () {
@@ -124,7 +131,7 @@ describe('FileProof', function () {
 
   describe('verifyCommit', function () {
     beforeEach(async function () {
-      await fileProof.registerCommit(commit, timestamp, serverSignature);
+      await fileProof.registerCommit(commit, timestamp, userSignature, serverSignature);
     });
 
     it('Should verify existing commit', async function () {
@@ -149,7 +156,7 @@ describe('FileProof', function () {
 
   describe('getCommitByIndex', function () {
     beforeEach(async function () {
-      await fileProof.registerCommit(commit, timestamp, serverSignature);
+      await fileProof.registerCommit(commit, timestamp, userSignature, serverSignature);
     });
 
     it('Should return commit by index', async function () {
@@ -171,9 +178,9 @@ describe('FileProof', function () {
     const commit3 = hre.ethers.sha256(hre.ethers.toUtf8Bytes('commit3'));
 
     beforeEach(async function () {
-      await fileProof.registerCommit(commit, timestamp, serverSignature);
-      await fileProof.registerCommit(commit2, timestamp, serverSignature);
-      await fileProof.registerCommit(commit3, timestamp, serverSignature);
+      await fileProof.registerCommit(commit, timestamp, userSignature, serverSignature);
+      await fileProof.registerCommit(commit2, timestamp, userSignature, serverSignature);
+      await fileProof.registerCommit(commit3, timestamp, userSignature, serverSignature);
     });
 
     it('Should return commits in range', async function () {
@@ -216,7 +223,7 @@ describe('FileProof', function () {
       ];
 
       for (const c of commits) {
-        await fileProof.registerCommit(c, timestamp, serverSignature);
+        await fileProof.registerCommit(c, timestamp, userSignature, serverSignature);
       }
 
       expect(await fileProof.totalCommits()).to.equal(3);
@@ -228,7 +235,7 @@ describe('FileProof', function () {
     it('Should preserve commit data integrity', async function () {
       const blockNumberBefore = await hre.ethers.provider.getBlockNumber();
 
-      await fileProof.registerCommit(commit, timestamp, serverSignature);
+      await fileProof.registerCommit(commit, timestamp, userSignature, serverSignature);
 
       const record = await fileProof.getCommit(commit);
       const [exists, ts, bn] = await fileProof.verifyCommit(commit);
@@ -250,7 +257,7 @@ describe('FileProof', function () {
       );
 
       // On-chain에 commit 등록
-      await fileProof.registerCommit(calculatedCommit, timestamp, serverSignature);
+      await fileProof.registerCommit(calculatedCommit, timestamp, userSignature, serverSignature);
 
       // 검증: 계산한 commit이 블록체인에 존재하는지 확인
       const [exists, ts, bn] = await fileProof.verifyCommit(calculatedCommit);

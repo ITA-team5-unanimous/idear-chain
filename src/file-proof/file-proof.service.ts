@@ -25,6 +25,7 @@ import {
 export interface CommitRecord {
   commit: string;
   timestamp: number;
+  userSignature: string;
   serverSignature: string;
   blockNumber: number;
   registeredAt: number;
@@ -132,6 +133,7 @@ export class FileProofService implements OnModuleInit {
       const tx = await this.fileProofContract.registerCommit(
         dto.commit,
         dto.timestamp,
+        dto.userSignature,
         dto.serverSignature,
       );
 
@@ -176,6 +178,7 @@ export class FileProofService implements OnModuleInit {
         txHash,
         commit: record.commit,
         timestamp: Number(record.timestamp),
+        userSignature: record.userSignature,
         serverSignature: record.serverSignature,
         blockNumber,
         registeredAt: Number(record.registeredAt),
