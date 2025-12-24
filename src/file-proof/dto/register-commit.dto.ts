@@ -9,6 +9,10 @@ export class RegisterCommitDto {
   @IsNumber({}, { message: 'timestamp는 숫자여야 합니다' })
   timestamp: number;
 
+  @IsNotEmpty({ message: 'userSignature는 필수 항목입니다' })
+  @IsString({ message: 'userSignature는 문자열이어야 합니다' })
+  userSignature: string;
+
   @IsNotEmpty({ message: 'serverSignature는 필수 항목입니다' })
   @IsString({ message: 'serverSignature는 문자열이어야 합니다' })
   serverSignature: string;

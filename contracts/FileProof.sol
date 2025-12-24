@@ -15,13 +15,15 @@ contract FileProof {
      * @notice commit 레코드 구조
      * @param commit SHA256(fileHash + randomSalt)
      * @param timestamp 서버가 제공한 원본 업로드 시각
-     * @param serverSignature 서버 서명 (userSignature 포함)
+     * @param userSignature 사용자 서명 (fileHash + timestamp)
+     * @param serverSignature 서버 서명 (commit + timestamp + userSignature)
      * @param blockNumber 블록 번호
      * @param registeredAt 블록 타임스탬프
      */
     struct CommitRecord {
         bytes32 commit;
         uint256 timestamp;
+        bytes userSignature;
         bytes serverSignature;
         uint256 blockNumber;
         uint256 registeredAt;
@@ -55,16 +57,19 @@ contract FileProof {
     function registerCommit(
         bytes32 _commit,
         uint256 _timestamp,
+        bytes calldata _userSignature,
         bytes calldata _serverSignature
     ) external onlyOwner returns (bool) {
         require(_commit != bytes32(0), "Empty commit");
         require(_timestamp > 0, "Invalid timestamp");
-        require(_serverSignature.length > 0, "Missing signature");
+        require(_userSignature.length > 0, "Missing user signature");
+        require(_serverSignature.length > 0, "Missing server signature");
         require(!commitRecords[_commit].exists, "Already registered");
 
         commitRecords[_commit] = CommitRecord({
             commit: _commit,
             timestamp: _timestamp,
+            userSignature: _userSignature,
             serverSignature: _serverSignature,
             blockNumber: block.number,
             registeredAt: block.timestamp,
