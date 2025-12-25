@@ -44,17 +44,21 @@ export class CommitProcessor extends WorkerHost {
   private classifyFailureReason(error: Error): TransactionFailureReason {
     const msg = error.message?.toLowerCase() || '';
 
-    // Nonce 관련 에러
-    if (msg.includes('nonce')) {
-      return TransactionFailureReason.NONCE_ERROR;
-    }
-
     // RPC rate limit
     if (msg.includes('429') || msg.includes('rate limit')) {
       return TransactionFailureReason.RPC_RATE_LIMIT;
     }
 
+    if (msg.includes('not in mempool')) {
+      return TransactionFailureReason.NETWORK_ERROR;
+    }
+
     // 네트워크 에러
-    return TransactionFailureReason.NETWORK_ERROR;
+    if (msg.includes('network') || msg.includes('timeout')) {
+      return TransactionFailureReason.NETWORK_ERROR;
+    }
+
+    // 기타 제출 실패 (nonce 에러 포함)
+    return TransactionFailureReason.SUBMISSION_FAILED;
   }
 }
