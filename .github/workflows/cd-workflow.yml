@@ -74,7 +74,6 @@ jobs:
             sudo docker run --name ${CONTAINER_NAME} -d \
                  --network ${DOCKER_NETWORK} \
                  -p 3000:3000 \
-                 --restart unless-stopped \
                  -e NODE_ENV=production \
                  -e NETWORK=${{ secrets.NETWORK }} \
                  -e RPC_URL=${{ secrets.RPC_URL }} \
