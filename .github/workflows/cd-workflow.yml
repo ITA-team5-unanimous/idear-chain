@@ -44,6 +44,24 @@ jobs:
 
             IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKER_IMAGE_NAME }}"
             CONTAINER_NAME="idear-chain"
+            DOCKER_NETWORK="idear-net"
+            REDIS_CONTAINER_NAME="redis"
+
+            sudo docker network inspect ${DOCKER_NETWORK} >/dev/null 2>&1 || sudo docker network create ${DOCKER_NETWORK}
+
+            if ! sudo docker ps -a --format '{{.Names}}' | grep -qx ${REDIS_CONTAINER_NAME}; then
+              sudo docker run -d \
+                --name ${REDIS_CONTAINER_NAME} \
+                --network ${DOCKER_NETWORK} \
+                --restart unless-stopped \
+                redis:7-alpine
+            else
+              sudo docker network connect ${DOCKER_NETWORK} ${REDIS_CONTAINER_NAME} >/dev/null 2>&1 || true
+              
+              if ! sudo docker ps --format '{{.Names}}' | grep -qx ${REDIS_CONTAINER_NAME}; then
+                sudo docker start ${REDIS_CONTAINER_NAME}
+              fi
+            fi
 
             sudo docker pull ${IMAGE_NAME}
 
@@ -54,6 +72,7 @@ jobs:
             fi
 
             sudo docker run --name ${CONTAINER_NAME} -d \
+                 --network ${DOCKER_NETWORK} \
                  -p 3000:3000 \
                  --restart unless-stopped \
                  -e NODE_ENV=production \
@@ -62,9 +81,8 @@ jobs:
                  -e WS_RPC_URL=${{ secrets.WS_RPC_URL }} \
                  -e PRIVATE_KEY=${{ secrets.PRIVATE_KEY }} \
                  -e WEBHOOK_URL=${{ secrets.WEBHOOK_URL }} \
-                 -e REDIS_HOST=${{ secrets.REDIS_HOST }} \
-                 -e REDIS_PORT=${{ secrets.REDIS_PORT }} \
-                 -e REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }} \
+                 -e REDIS_HOST=${REDIS_CONTAINER_NAME} \
+                 -e REDIS_PORT=6379 \
                  ${IMAGE_NAME}
 
             sleep 10
