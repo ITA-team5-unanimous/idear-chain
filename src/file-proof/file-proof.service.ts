@@ -139,6 +139,9 @@ export class FileProofService implements OnModuleInit {
 
       this.logger.log(`Transaction sent for commit ${dto.commit}: ${tx.hash} (${Date.now()-startTime}ms)`);
 
+      // Mempool 진입 대기 (nonce 충돌 방지)
+      await this.waitForMempool(tx.hash);
+
       // SUCCESS는 WebSocket 이벤트 리스너에서 처리
     } catch (error) {
       this.logger.error(`Failed to submit transaction for commit ${dto.commit}: ${error.message}`);
@@ -148,9 +151,13 @@ export class FileProofService implements OnModuleInit {
         throw error;
       }
 
+      const reason = error.message?.includes('not in mempool')
+        ? TransactionFailureReason.NETWORK_ERROR
+        : TransactionFailureReason.SUBMISSION_FAILED;
+
       await this.sendFailureWebhook(
         dto.commit,
-        TransactionFailureReason.SUBMISSION_FAILED,
+        reason,
         error.message,
       );
     }
@@ -369,6 +376,39 @@ export class FileProofService implements OnModuleInit {
     }
   }
 
+  // Nonce 충돌 방지를 위해 트랜잭션의 mempool 진입까지 대기
+  private async waitForMempool(
+    txHash: string,
+    timeoutMs: number = 2000,
+  ): Promise<void> {
+    const provider = this.blockchainService.getProvider();
+    const interval = 100;
+    const maxAttempts = Math.floor(timeoutMs / interval);
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const pendingTx = await provider.getTransaction(txHash);
+
+        if (pendingTx) {
+          this.logger.debug(
+            `Transaction found in mempool on attempt ${attempt}: ${txHash}`,
+          );
+          return;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Error checking mempool (attempt ${attempt}): ${error.message}`,
+        );
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+
+    throw new Error(
+      `Transaction not in mempool after ${timeoutMs}ms: ${txHash}`,
+    );
+  }
+
   // 재시도 가능한 에러 판단
   private isRetryableError(error: any): boolean {
     const msg = error.message?.toLowerCase() || '';
@@ -380,8 +420,7 @@ export class FileProofService implements OnModuleInit {
       msg.includes('econnreset') ||
       msg.includes('429') ||
       msg.includes('rate limit') ||
-      msg.includes('service unavailable') ||
-      msg.includes('nonce')
+      msg.includes('service unavailable')
     );
   }
 
