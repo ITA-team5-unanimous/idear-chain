@@ -1,12 +1,13 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ethers } from 'ethers';
+import { WebSocketManager } from './websocket-manager';
 
 @Injectable()
-export class BlockchainService implements OnModuleInit {
+export class BlockchainService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BlockchainService.name);
   private provider: ethers.JsonRpcProvider;
-  private wsProvider: ethers.WebSocketProvider;
+  private wsManager: WebSocketManager;
   private signer: ethers.Wallet;
 
   constructor(private configService: ConfigService) {}
@@ -35,30 +36,58 @@ export class BlockchainService implements OnModuleInit {
     }
   }
 
-  private initializeWebSocketProvider() {
+  private async initializeWebSocketProvider() {
     const wsRpcUrl = this.configService.get<string>('WS_RPC_URL');
 
     if (!wsRpcUrl) {
       throw new Error('WS_RPC_URL is not defined');
     }
 
-    this.wsProvider = new ethers.WebSocketProvider(wsRpcUrl);
-
-    this.wsProvider.once('block', (blockNumber) => {
-      this.logger.log(`WebSocket connected to blockchain: ${wsRpcUrl} (block: ${blockNumber})`);
+    this.wsManager = new WebSocketManager(wsRpcUrl, {
+      baseReconnectDelay: 1000,
+      maxReconnectDelay: 60000,
+      healthCheckInterval: 60000,
+      healthCheckRpcTimeout: 5000
     });
 
-    this.wsProvider.on('error', (error) => {
+    // 이벤트 리스너 설정
+    this.wsManager.on('connected', () => {
+      this.logger.log('WebSocket connected to blockchain');
+    });
+
+    this.wsManager.on('disconnected', (code, reason) => {
+      this.logger.warn(`WebSocket disconnected (code: ${code}, reason: ${reason})`);
+    });
+
+    this.wsManager.on('reconnecting', (attempt, delay) => {
+      this.logger.log(`Reconnecting to WebSocket (attempt ${attempt}, delay ${Math.round(delay)}ms)`);
+    });
+
+    this.wsManager.on('reconnected', () => {
+      this.logger.log('WebSocket reconnected to blockchain');
+    });
+
+    this.wsManager.on('error', (error) => {
       this.logger.error(`WebSocket error: ${error.message}`);
     });
+
+    try {
+      await this.wsManager.connect();
+    } catch (error) {
+      this.logger.error(`Failed to initialize WebSocket: ${error.message}`);
+    }
   }
 
   getProvider(): ethers.JsonRpcProvider {
     return this.provider;
   }
 
-  getWsProvider(): ethers.WebSocketProvider {
-    return this.wsProvider;
+  getWsProvider(): ethers.WebSocketProvider | null {
+    return this.wsManager?.getProvider() || null;
+  }
+
+  getWsManager(): WebSocketManager {
+    return this.wsManager;
   }
 
   getSigner(): ethers.Wallet {
@@ -86,5 +115,12 @@ export class BlockchainService implements OnModuleInit {
   async getBalance(address: string): Promise<string> {
     const balance = await this.provider.getBalance(address);
     return ethers.formatEther(balance);
+  }
+
+  async onModuleDestroy() {
+    if (this.wsManager) {
+      await this.wsManager.destroy();
+      this.logger.log('WebSocketManager destroyed');
+    }
   }
 }
