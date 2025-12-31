@@ -52,6 +52,7 @@ export class FileProofService implements OnModuleInit {
   async onModuleInit() {
     await this.loadContract();
     await this.setupEventListener();
+    this.setupReconnectionHandler();
   }
 
   private async loadContract() {
@@ -299,6 +300,15 @@ export class FileProofService implements OnModuleInit {
     try {
       const wsProvider = this.blockchainService.getWsProvider();
 
+      if (!wsProvider) {
+        this.logger.warn('WebSocket provider not available, skipping event listener setup');
+        return;
+      }
+
+      if (this.wsContract) {
+        this.wsContract.removeAllListeners('CommitRegistered');
+      }
+
       this.wsContract = new ethers.Contract(
         this.contractAddress,
         this.fileProofContract.interface,
@@ -351,6 +361,26 @@ export class FileProofService implements OnModuleInit {
     }
   }
 
+  // WebSocket 재연결 시 이벤트 리스너 재설정
+  private setupReconnectionHandler(): void {
+    const wsManager = this.blockchainService.getWsManager();
+
+    if (!wsManager) {
+      this.logger.warn('WebSocketManager not available');
+      return;
+    }
+
+    wsManager.on('reconnected', async () => {
+      this.logger.log('WebSocket reconnected, re-registering event listeners');
+      try {
+        await this.setupEventListener();
+        this.logger.log('Event listeners re-registered successfully');
+      } catch (error) {
+        this.logger.error(`Failed to re-register event listeners: ${error.message}`);
+      }
+    });
+  }
+
   // 웹훅 전송
   private async sendWebhook(transactionResultDto: TransactionResultDto): Promise<void> {
     if (!this.webhookUrl) {
@@ -359,7 +389,7 @@ export class FileProofService implements OnModuleInit {
     }
 
     try {
-      this.logger.log(`Sending webhook to ${this.webhookUrl} for commit ${transactionResultDto.commit}`);
+      this.logger.log(`Sending ${transactionResultDto.status} webhook to ${this.webhookUrl} for commit ${transactionResultDto.commit}`);
 
       await firstValueFrom(
         this.httpService.post(this.webhookUrl, transactionResultDto, {
